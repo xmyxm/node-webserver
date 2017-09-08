@@ -244,10 +244,10 @@ class StaticServer {
             this.routeHandler(pathName, req, res);
         }).listen(this.port, err => {
             if (err) {
-                console.error(err);
-                console.info('Failed to start server');
+                console.info('1. 静态资源监听服务开启失败·····');
+                console.error('2. ' + err);
             } else {
-                console.info(`Server started on port ${this.port}`);
+                console.info(`静态资源监听服务开启成功，端口号： ${this.port}`);
             }
         });
     }
