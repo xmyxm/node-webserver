@@ -7,9 +7,7 @@ const zlib = require('zlib');
 const mime = require('./lib/mime');
 const config = require('./config.json');
 
-const hasTrailingSlash = url => url[url.length - 1] === '/';
-
-class StaticServer {
+class fileServer {
     constructor() {
         this.port = config.port;
         this.root = __dirname + config.root;
@@ -22,13 +20,13 @@ class StaticServer {
     }
 
     //服务器500错误返回
-    respondError(err, res) {
+    response500(err, res) {
         res.writeHead(500);
         return res.end(err);        
     }
 
     //服务404状态返回
-    respondNotFound(req, res) {
+    response404(req, res) {
         res.writeHead(404, {
             'Content-Type': 'text/html'
         });
@@ -36,14 +34,14 @@ class StaticServer {
     }
 
     //通过修改时间和文件大小计算文件etag标记
-    generateETag(stat) {
+    createETag(stat) {
         const mtime = stat.mtime.getTime().toString(16);
         const size = stat.size.toString(16);
         return `W/"${size}-${mtime}"`;
     }
 
     //response头缓存标记属性写入
-    setFreshHeaders(stat, res) {
+    setCacheHeaders(stat, res) {
     	//获取文件的最后修改时间设置到 Last-Modified
         const lastModified = stat.mtime.toUTCString();
         if (this.enableExpires) {
@@ -65,12 +63,12 @@ class StaticServer {
         }
         if (this.enableETag) {
         	//设置请求资源的etag，便于下次比较
-            res.setHeader('ETag', this.generateETag(stat));
+            res.setHeader('ETag', this.createETag(stat));
         }
     }
 
     //request 头验证请求是新鲜
-    isFresh(reqHeaders, resHeaders) {
+    isValid(reqHeaders, resHeaders) {
         const  noneMatch = reqHeaders['if-none-match'];
         const  lastModified = reqHeaders['if-modified-since'];
         if (!(noneMatch || lastModified)) return false;
@@ -80,20 +78,20 @@ class StaticServer {
     }
 
     //判断是否配置为应该压缩文件
-    shouldCompress(pathName) {
+    isNeedCompress(pathName) {
         return path.extname(pathName).match(this.zipMatch);
     }
 
     //请求响应
     respond(pathName, req, res) {
         fs.stat(pathName, (err, stat) => {
-            if (err) return respondError(err, res);
+            if (err) return response500(err, res);
             //写入缓存头到 response
-            this.setFreshHeaders(stat, res);
+            this.setCacheHeaders(stat, res);
             //验证文件是否过期
-            if (this.isFresh(req.headers, res._headers)) {
+            if (this.isValid(req.headers, res._headers)) {
             	//直接304
-                this.responseNotModified(res);
+                this.response304(res);
             } else {
             	//读文件并返回
                 this.responseFile(stat, pathName, req, res);
@@ -103,7 +101,7 @@ class StaticServer {
     }
 
     //文件未更改的请求响应
-    responseNotModified(res) {
+    response304(res) {
         res.statusCode = 304;
         res.end();
     }
@@ -139,7 +137,7 @@ class StaticServer {
         }
     }
 
-    //写入response头，告诉浏览器文件是否发送完毕
+    //写入Content-Range，告诉浏览器文件是否发送状态
     rangeHandler(pathName, rangeText, totalSize, res) {
         const range = this.getRange(rangeText, totalSize);
         if (range.start > totalSize || range.end > totalSize || range.start > range.end) {
@@ -170,7 +168,7 @@ class StaticServer {
         	//读取整个文件流到内存
             readStream = fs.createReadStream(pathName);
         }
-        if (this.shouldCompress(pathName)) {
+        if (this.isNeedCompress(pathName)) {
         	//压缩文件流
             readStream = this.compressHandler(readStream, req, res);
         }
@@ -178,7 +176,7 @@ class StaticServer {
     }
 
     //对于不符合规范的文件夹请求修正为正确的请求地址进行重定向
-    respondRedirect(req, res) {
+    responseRedirect(req, res) {
         const location = req.url + '/';
         res.writeHead(301, {
             'Location': location,
@@ -188,7 +186,7 @@ class StaticServer {
     }
 
     //请求地址为文件夹路径时，优先读取配置默认index.html文件
-    respondDirectory(pathName, req, res) {
+    responseDirectory(pathName, req, res) {
         const indexPagePath = path.join(pathName, this.indexPage);
         if (fs.existsSync(indexPagePath)) {
             this.respond(indexPagePath, req, res);
@@ -196,7 +194,7 @@ class StaticServer {
         	//异步读取文件夹下的所有文件目录
             fs.readdir(pathName, (err, files) => {
                 if (err) {
-                    respondError(err, res);
+                    response500(err, res);
                 }
                 const requestPath = url.parse(req.url).pathname;
                 let content = `<h1>Index of ${requestPath}</h1>`;
@@ -222,18 +220,18 @@ class StaticServer {
             if (!err) {
                 const requestedPath = url.parse(req.url).pathname;
                 //判断请求路径以/结尾,且当前文件夹存在
-                if (hasTrailingSlash(requestedPath) && stat.isDirectory()) {
-                    this.respondDirectory(pathName, req, res);
+                if (/\\$/.test(requestedPath) && stat.isDirectory()) {
+                    this.responseDirectory(pathName, req, res);
                 } else if (stat.isDirectory()) {
                 	//文件夹请求路径不对时重定向
-                    this.respondRedirect(req, res);
+                    this.responseRedirect(req, res);
                 } else {
                 	//正常文件请求
                     this.respond(pathName, req, res);
                 }
             } else {
             	//404
-                this.respondNotFound(req, res);
+                this.response404(req, res);
             }
         });
     }
@@ -253,9 +251,9 @@ class StaticServer {
     }
 }
 
-module.exports = StaticServer;
 
-
+const server = new fileServer();
+server.start();
 
 
 
