@@ -4,15 +4,15 @@ const fs = require('fs');
 const url = require('url');
 //zlib 服务端专用压缩数据库
 const zlib = require('zlib');
-const mime = require('./mime');
-const config = require('./config/default');
+const mime = require('./lib/mime');
+const config = require('./config.json');
 
 const hasTrailingSlash = url => url[url.length - 1] === '/';
 
 class StaticServer {
     constructor() {
         this.port = config.port;
-        this.root = config.root;
+        this.root = __dirname + config.root;
         this.indexPage = config.indexPage;
         this.enableCacheControl = config.cacheControl;
         this.enableExpires = config.expires;
@@ -35,7 +35,7 @@ class StaticServer {
         res.end(`<h1>Not Found</h1><p>The requested URL ${req.url} was not found on this server.</p>`);
     }
 
-    //计算文件etag标记
+    //通过修改时间和文件大小计算文件etag标记
     generateETag(stat) {
         const mtime = stat.mtime.getTime().toString(16);
         const size = stat.size.toString(16);
@@ -44,23 +44,32 @@ class StaticServer {
 
     //response头缓存标记属性写入
     setFreshHeaders(stat, res) {
+    	//获取文件的最后修改时间设置到 Last-Modified
         const lastModified = stat.mtime.toUTCString();
         if (this.enableExpires) {
             const expireTime = (new Date(Date.now() + this.maxAge * 1000)).toUTCString();
+            //设置多少秒后资源过期，在资源过期前不过发起请求，但是用户F5或者点击Refresh按钮的时候就算对于有Expires的URI，一样也会发一个HTTP请求出去
             res.setHeader('Expires', expireTime);
         }
         if (this.enableCacheControl) {
+        	//资源在本地缓存多少秒
+        	//Expires = 时间，HTTP 1.0 版本，缓存的载止时间，允许客户端在这个时间之前不去检查（发请求）
+			//max-age = 秒，HTTP 1.1版本，资源在本地缓存多少秒。
+			//如果max-age和Expires同时存在，则被Cache-Control的max-age覆盖。
+			//Expires 的一个缺点就是，返回的到期时间是服务器端的时间，这样存在一个问题，如果客户端的时间与服务器的时间相差很大，那么误差就很大，所以在HTTP 1.1版开始，使用Cache-Control: max-age=秒替代。
             res.setHeader('Cache-Control', `public, max-age=${this.maxAge}`);
         }
         if (this.enableLastModified) {
+        	//标记资源最后修改时间，下次请求过来直接比较修改时间，未修改直接304，但是逃不掉的是一次http请求
             res.setHeader('Last-Modified', lastModified);
         }
         if (this.enableETag) {
+        	//设置请求资源的etag，便于下次比较
             res.setHeader('ETag', this.generateETag(stat));
         }
     }
 
-    //request 头验证请求是否过期
+    //request 头验证请求是新鲜
     isFresh(reqHeaders, resHeaders) {
         const  noneMatch = reqHeaders['if-none-match'];
         const  lastModified = reqHeaders['if-modified-since'];
@@ -79,10 +88,14 @@ class StaticServer {
     respond(pathName, req, res) {
         fs.stat(pathName, (err, stat) => {
             if (err) return respondError(err, res);
+            //写入缓存头到 response
             this.setFreshHeaders(stat, res);
+            //验证文件是否过期
             if (this.isFresh(req.headers, res._headers)) {
+            	//直接304
                 this.responseNotModified(res);
             } else {
+            	//读文件并返回
                 this.responseFile(stat, pathName, req, res);
             }
         });
@@ -174,12 +187,13 @@ class StaticServer {
         res.end(`Redirecting to <a href='${location}'>${location}</a>`);
     }
 
-    //
+    //请求地址为文件夹路径时，优先读取配置默认index.html文件
     respondDirectory(pathName, req, res) {
         const indexPagePath = path.join(pathName, this.indexPage);
         if (fs.existsSync(indexPagePath)) {
             this.respond(indexPagePath, req, res);
         } else {
+        	//异步读取文件夹下的所有文件目录
             fs.readdir(pathName, (err, files) => {
                 if (err) {
                     respondError(err, res);
@@ -203,18 +217,22 @@ class StaticServer {
     }
 
     routeHandler(pathName, req, res) {
+    	//读取文件基本信息（size, uid, dev, atime, mtime, ctime）
         fs.stat(pathName, (err, stat) => {
             if (!err) {
                 const requestedPath = url.parse(req.url).pathname;
-                //判断请求路径是否以/结尾
+                //判断请求路径以/结尾,且当前文件夹存在
                 if (hasTrailingSlash(requestedPath) && stat.isDirectory()) {
                     this.respondDirectory(pathName, req, res);
                 } else if (stat.isDirectory()) {
+                	//文件夹请求路径不对时重定向
                     this.respondRedirect(req, res);
                 } else {
+                	//正常文件请求
                     this.respond(pathName, req, res);
                 }
             } else {
+            	//404
                 this.respondNotFound(req, res);
             }
         });

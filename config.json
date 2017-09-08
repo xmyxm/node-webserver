@@ -1,6 +1,6 @@
 {
     "port": 8088,
-    "root": "/Users/sheila1227/Public",
+    "root": "/public",
     "indexPage": "index.html",
     "cacheControl": true,
     "expires": true,
