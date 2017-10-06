@@ -249,6 +249,8 @@ class fileServer {
                 print.error('2. ' + err);
             } else {
                 print.info(`静态资源监听服务开启成功，端口号： ${this.port}`);
+                print.info('请在浏览器开始你的访问之旅！');
+                print.info('http://localhost:8088');
             }
         });
     }
