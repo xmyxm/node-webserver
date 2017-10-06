@@ -5,6 +5,7 @@ const url = require('url');
 //zlib 服务端专用压缩数据库
 const zlib = require('zlib');
 const mime = require('./lib/mime');
+const print = require('./lib/printmsg');
 const config = require('./config.json');
 
 class fileServer {
@@ -27,6 +28,7 @@ class fileServer {
 
     //服务404状态返回
     response404(req, res) {
+        print.warn('404请求，url地址：' + req.url);
         res.writeHead(404, {
             'Content-Type': 'text/html'
         });
@@ -220,7 +222,7 @@ class fileServer {
             if (!err) {
                 const requestedPath = url.parse(req.url).pathname;
                 //判断请求路径以/结尾,且当前文件夹存在
-                if (/\\$/.test(requestedPath) && stat.isDirectory()) {
+                if (/\/$/.test(requestedPath) && stat.isDirectory()) {
                     this.responseDirectory(pathName, req, res);
                 } else if (stat.isDirectory()) {
                 	//文件夹请求路径不对时重定向
@@ -239,13 +241,14 @@ class fileServer {
     start() {
         http.createServer((req, res) => {
             const pathName = path.join(this.root, path.normalize(req.url));
+            print.info('请求url：' + req.url + '; 访问本地路径：' + pathName);
             this.routeHandler(pathName, req, res);
         }).listen(this.port, err => {
             if (err) {
-                console.info('1. 静态资源监听服务开启失败·····');
-                console.error('2. ' + err);
+                print.info('1. 静态资源监听服务开启失败·····');
+                print.error('2. ' + err);
             } else {
-                console.info(`静态资源监听服务开启成功，端口号： ${this.port}`);
+                print.info(`静态资源监听服务开启成功，端口号： ${this.port}`);
             }
         });
     }
