@@ -1,6 +1,6 @@
 {
     "port": 8088,
-    "root": "/dist",
+    "root": "/public",
     "indexPage": "index.html",
     "cacheControl": true,
     "expires": true,
