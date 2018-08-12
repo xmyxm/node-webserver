@@ -5,6 +5,7 @@ const url = require('url');
 //zlib 服务端专用压缩数据库
 const zlib = require('zlib');
 const mime = require('./lib/mime');
+const print = require('./lib/printmsg');
 const config = require('./config.json');
 
 class fileServer {
@@ -27,6 +28,7 @@ class fileServer {
 
     //服务404状态返回
     response404(req, res) {
+        print.warn('404请求，url地址：' + req.url);
         res.writeHead(404, {
             'Content-Type': 'text/html'
         });
@@ -42,7 +44,7 @@ class fileServer {
 
     //response头缓存标记属性写入
     setCacheHeaders(stat, res) {
-    	//获取文件的最后修改时间设置到 Last-Modified
+    //获取文件的最后修改时间设置到 Last-Modified
         const lastModified = stat.mtime.toUTCString();
         if (this.enableExpires) {
             const expireTime = (new Date(Date.now() + this.maxAge * 1000)).toUTCString();
@@ -50,19 +52,19 @@ class fileServer {
             res.setHeader('Expires', expireTime);
         }
         if (this.enableCacheControl) {
-        	//资源在本地缓存多少秒
-        	//Expires = 时间，HTTP 1.0 版本，缓存的载止时间，允许客户端在这个时间之前不去检查（发请求）
-			//max-age = 秒，HTTP 1.1版本，资源在本地缓存多少秒。
-			//如果max-age和Expires同时存在，则被Cache-Control的max-age覆盖。
-			//Expires 的一个缺点就是，返回的到期时间是服务器端的时间，这样存在一个问题，如果客户端的时间与服务器的时间相差很大，那么误差就很大，所以在HTTP 1.1版开始，使用Cache-Control: max-age=秒替代。
+        //资源在本地缓存多少秒
+        //Expires = 时间，HTTP 1.0 版本，缓存的载止时间，允许客户端在这个时间之前不去检查（发请求）
+        //max-age = 秒，HTTP 1.1版本，资源在本地缓存多少秒。
+        //如果max-age和Expires同时存在，则被Cache-Control的max-age覆盖。
+            //Expires 的一个缺点就是，返回的到期时间是服务器端的时间，这样存在一个问题，如果客户端的时间与服务器的时间相差很大，那么误差就很大，所以在HTTP 1.1版开始，使用Cache-Control: max-age=秒替代。
             res.setHeader('Cache-Control', `public, max-age=${this.maxAge}`);
         }
         if (this.enableLastModified) {
-        	//标记资源最后修改时间，下次请求过来直接比较修改时间，未修改直接304，但是逃不掉的是一次http请求
+        //标记资源最后修改时间，下次请求过来直接比较修改时间，未修改直接304，但是逃不掉的是一次http请求
             res.setHeader('Last-Modified', lastModified);
         }
         if (this.enableETag) {
-        	//设置请求资源的etag，便于下次比较
+        //设置请求资源的etag，便于下次比较
             res.setHeader('ETag', this.createETag(stat));
         }
     }
@@ -85,15 +87,15 @@ class fileServer {
     //请求响应
     respond(pathName, req, res) {
         fs.stat(pathName, (err, stat) => {
-            if (err) return response500(err, res);
+            if (err) return this.response500(err, res);
             //写入缓存头到 response
             this.setCacheHeaders(stat, res);
             //验证文件是否过期
             if (this.isValid(req.headers, res._headers)) {
-            	//直接304
+            //直接304
                 this.response304(res);
             } else {
-            	//读文件并返回
+            //读文件并返回
                 this.responseFile(stat, pathName, req, res);
             }
         });
@@ -106,7 +108,7 @@ class fileServer {
         res.end();
     }
 
-	//判断浏览器是否支持 服务器资源压缩，支持压缩即启用对应压缩方案，gizp方案优先
+    //判断浏览器是否支持 服务器资源压缩，支持压缩即启用对应压缩方案，gizp方案优先
     compressHandler(readStream, req, res) {
         const acceptEncoding = req.headers['accept-encoding'];
         if (!acceptEncoding || !acceptEncoding.match(/\b(gzip|deflate)\b/)) {
@@ -165,11 +167,11 @@ class fileServer {
             readStream = this.rangeHandler(pathName, req.headers['range'], stat.size, res);
             if (!readStream) return;
         } else {
-        	//读取整个文件流到内存
+        //读取整个文件流到内存
             readStream = fs.createReadStream(pathName);
         }
         if (this.isNeedCompress(pathName)) {
-        	//压缩文件流
+        //压缩文件流
             readStream = this.compressHandler(readStream, req, res);
         }
         readStream.pipe(res);
@@ -191,7 +193,7 @@ class fileServer {
         if (fs.existsSync(indexPagePath)) {
             this.respond(indexPagePath, req, res);
         } else {
-        	//异步读取文件夹下的所有文件目录
+        //异步读取文件夹下的所有文件目录
             fs.readdir(pathName, (err, files) => {
                 if (err) {
                     response500(err, res);
@@ -215,22 +217,22 @@ class fileServer {
     }
 
     routeHandler(pathName, req, res) {
-    	//读取文件基本信息（size, uid, dev, atime, mtime, ctime）
+    //读取文件基本信息（size, uid, dev, atime, mtime, ctime）
         fs.stat(pathName, (err, stat) => {
             if (!err) {
                 const requestedPath = url.parse(req.url).pathname;
                 //判断请求路径以/结尾,且当前文件夹存在
-                if (/\\$/.test(requestedPath) && stat.isDirectory()) {
+                if (/\/$/.test(requestedPath) && stat.isDirectory()) {
                     this.responseDirectory(pathName, req, res);
                 } else if (stat.isDirectory()) {
-                	//文件夹请求路径不对时重定向
+                //文件夹请求路径不对时重定向
                     this.responseRedirect(req, res);
                 } else {
-                	//正常文件请求
+                //正常文件请求
                     this.respond(pathName, req, res);
                 }
             } else {
-            	//404
+            //404
                 this.response404(req, res);
             }
         });
@@ -239,13 +241,16 @@ class fileServer {
     start() {
         http.createServer((req, res) => {
             const pathName = path.join(this.root, path.normalize(req.url));
+            print.info('请求url：' + req.url + '; 访问本地路径：' + pathName);
             this.routeHandler(pathName, req, res);
         }).listen(this.port, err => {
             if (err) {
-                console.info('1. 静态资源监听服务开启失败·····');
-                console.error('2. ' + err);
+                print.info('1. 静态资源监听服务开启失败·····');
+                print.error('2. ' + err);
             } else {
-                console.info(`静态资源监听服务开启成功，端口号： ${this.port}`);
+                print.info(`静态资源监听服务开启成功，端口号： ${this.port}`);
+                print.info('请在浏览器开始你的访问之旅！');
+                print.info('http://localhost:8088');
             }
         });
     }
