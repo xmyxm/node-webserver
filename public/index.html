@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="format-detection" content="email=no">
+	<title>首页</title>
+	<link rel="stylesheet" type="text/css" href="./base.css">
+</head>
+<body>
+	<div id="content"></div>
+	<script type="text/javascript">
+
+		function removeEvent(dom, event, callback, bubbling){
+	        bubbling = bubbling || false;
+	        if(dom.removeEventListener){
+	            dom.removeEventListener(event, callback, bubbling);
+	        }else{
+	             dom.detachEvent(event, 'on' + callback, bubbling);
+	        }
+	    }
+
+		function addEvent(dom, event, callback, bubbling){
+	        bubbling = bubbling || false;
+	        if(dom.addEventListener){
+	            dom.addEventListener(event, callback, bubbling);
+	        }else{
+	             dom.detachEvent(event, 'on' + callback, bubbling);
+	        }
+	    }
+
+		try {
+	        document.domain = domain.rootDomain(location.hostname);
+	    } catch (e) {}
+
+	    var frame = document.createElement("iframe")
+	    var url = location.origin + '/list.html'
+	    frame.src = url
+	    frame.width = "100%"
+	    frame.height = "300px"
+	    frame.frameBorder = "0"
+	    frame.scrolling = "no"
+	    document.getElementById("content").appendChild(frame)
+
+	    var iframeCallback = function(e) {
+	    	console.log('首页收到数据: ' + e.data)
+	    }
+
+	    function iframePostinfo(){
+	        removeEvent(window, 'message', iframeCallback)
+	        addEvent(window, 'message', iframeCallback)
+	        frame.contentWindow.postMessage("主页面通知子页面加载完毕了", frame.src);
+	    }
+
+	    if(window.postMessage){
+	        removeEvent(frame, 'load', iframePostinfo, false)
+	        addEvent(frame, 'load', iframePostinfo, false)
+	    }
+
+
+
+
+
+	</script>
+</body>
+</html>

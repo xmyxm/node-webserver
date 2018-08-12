@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="format-detection" content="email=no">
+	<title>列表页</title>
+	<style type="text/css">
+		.btntest{
+			border: 1px solid #e1e1e1;
+			border-radius: 6px;
+			width: 100px;
+			height: 36px;
+			background: #43f191;
+			font-size: 14px;
+			color: #fff;
+		}
+	</style>
+</head>
+<body>
+	<input id="btntest" type="button" class="btntest" name="" value="点击" />
+	<script type="text/javascript">
+
+	var source, originlink;
+
+	function sendata() {
+		var text = '我是子页面，传递数据给首页'
+		source.postMessage(text, originlink)
+	}
+
+	document.getElementById('btntest').onclick = sendata
+
+    var iframeCallback = function (e){
+         source = e.source;
+         originlink = e.origin;
+         console.log('子页面收到数据:' + e.data)
+     } 
+
+    if(window.postMessage){
+        if(window.addEventListener){
+            window.removeEventListener('message', iframeCallback);
+            window.addEventListener('message', iframeCallback);
+        }else{
+            window.detachEvent('onmessage', iframeCallback);
+            window.attachEvent('onmessage', iframeCallback);
+        }
+    }
+
+	</script>
+</body>
+</html>
