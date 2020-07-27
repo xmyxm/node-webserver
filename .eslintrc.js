@@ -5,6 +5,7 @@ module.exports = {
         "commonjs": true,
         "es6": true
     },
+    "linebreak-style": 0,
     "extends": "eslint:recommended",
     "parserOptions": {
         "sourceType": "module"
